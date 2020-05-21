@@ -1,73 +1,202 @@
 package com.josh.weatherapp;
 
-import androidx.appcompat.app.AppCompatActivity;
-
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Looper;
+import android.provider.Settings;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
+import com.androdocs.httprequest.HttpRequest;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnSuccessListener;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Locale;
-
-import com.androdocs.httprequest.HttpRequest;
-
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
-    String CITY = "dhaka,bd";
-    String API = "3b83dae12419f728565201e7c002b352";
+    // For location services, NOT WORKING
+    int PERMISSION_ID = 44;
+    FusedLocationProviderClient mFusedLocationClient;
 
-    TextView infoTextView;
+    // my openweather api key
+    String API = "3b83dae12419f728565201e7c002b352";
+    String searchField;
+
+    TextView temperatureTxt;
+    TextView cityNameTxt;
+    Button rawDataBtn;
+
+    // For the button "
+    boolean gotWeather = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-//        addressTxt = findViewById(R.id.address);
-//        updated_atTxt = findViewById(R.id.updated_at);
-//        statusTxt = findViewById(R.id.status);
-//        tempTxt = findViewById(R.id.temp);
-//        temp_minTxt = findViewById(R.id.temp_min);
-//        temp_maxTxt = findViewById(R.id.temp_max);
-//        sunriseTxt = findViewById(R.id.sunrise);
-//        sunsetTxt = findViewById(R.id.sunset);
-//        windTxt = findViewById(R.id.wind);
-//        pressureTxt = findViewById(R.id.pressure);
-//        humidityTxt = findViewById(R.id.humidity);
+        // Attempts to read the saved location from last search and look up weather
+        FileInputStream fin = null;
+        String cityName = "";
+        try {
+            fin = openFileInput("cityName");
+            int c;
+            while ((c = fin.read()) != -1) {
+                cityName = cityName + Character.toString((char) c);
+            }
+            fin.close();
+            searchField = cityName;
+            new weatherTask().execute();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
+        // Below code allows user to hit enter key to search instead of clicking "SEARCH"
+        final EditText searchEditText = (EditText) findViewById(R.id.searchEditText);
+        searchEditText.setOnKeyListener(new View.OnKeyListener() {
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    switch (keyCode) {
+                        case KeyEvent.KEYCODE_ENTER:
+                            String userInput = searchEditText.getText().toString();
+                            getWeather(searchEditText);
+
+                            InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                            imm.hideSoftInputFromWindow(searchEditText.getWindowToken(), 0);
+
+                            return true;
+                        default:
+                            break;
+                    }
+                }
+                return false;
+            }
+        });
+
+        // Attempt at getting device location, but it didnt work :(
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+    }
+
+    // method of actions to perform when clicking search button
+    public void getWeather(View v) {
+        EditText searchEditText = (EditText) findViewById(R.id.searchEditText);
+        searchField = searchEditText.getText().toString();
+
+        // Drops the onscreen keyboard
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(searchEditText.getWindowToken(), 0);
+
+        // Executes getting weather
         new weatherTask().execute();
     }
 
+    // copied from online tutorial on how to access web api, async because it has to wait for a return from API
     class weatherTask extends AsyncTask<String, Void, String> {
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-
-            /* Showing the ProgressBar, Making the main design GONE */
-//            findViewById(R.id.loader).setVisibility(View.VISIBLE);
-//            findViewById(R.id.mainContainer).setVisibility(View.GONE);
-//            findViewById(R.id.errorText).setVisibility(View.GONE);
         }
 
+        // Getting weather data from openweather api using my API key
         protected String doInBackground(String... args) {
-            String response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?q=" + CITY + "&units=metric&appid=" + API);
+            String response;
+            // Try searching openweather api with a city name endpoint, if error try using zip code endpoint
+            try {
+                response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?q=" + searchField + ",us&units=metric&appid=" + API);
+            } catch (Exception e) {
+                response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?zip=" + searchField + ",us&appid=" + API);
+            }
+            // Would use below code if location services worked
+//            switch (findLocationMethod) {
+//                case "coordinate":
+//                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?lat={" + lat + "}&lon={" + lon + "}&appid=" + API);
+//                    break;
+//                case "cityName":
+//                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?q=" + city + ",us&units=metric&appid=" + API);
+//                    break;
+//                case "zipCode":
+//                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?zip=" + zipCode + ",us&appid=" + API);
+//                    break;
+//                default:
+//                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?q=" + city + "&units=metric&appid=" + API);
+//                    break;
+//            }
             return response;
         }
 
+        // After receiving a response from api
         @Override
         protected void onPostExecute(String result) {
+            displayWeather(result);
+        }
+    }
 
-//            infoTextView = (TextView) findViewById(R.id.infoTextView);
-//            infoTextView.setText(result);
-//
-            System.out.println(result);
+    // actions to display weather and save data
+    public void displayWeather(String result) {
+        temperatureTxt = (TextView) findViewById(R.id.tempTxt);
+        cityNameTxt = (TextView) findViewById(R.id.cityNameTxt);
+        rawDataBtn = (Button) findViewById(R.id.rawDataBtn);
+        rawDataBtn.setVisibility(View.VISIBLE);
+        gotWeather = true;
+
+        // Write the raw weather data to storage for viewing in a different activity
+        FileOutputStream rawWeatherData;
+        try {
+            rawWeatherData = openFileOutput("rawWeatherData", Context.MODE_PRIVATE);
+            rawWeatherData.write(result.getBytes());
+            rawWeatherData.close();
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // Seeing if there are error messages returned
+        try {
+            JSONObject jsonObj = new JSONObject(result);
+
+            String code = jsonObj.getString("cod");
+            String message = jsonObj.getString("message");
+            cityNameTxt.setText(message);
+            temperatureTxt.setText("0°C");
+
+        } catch (JSONException e) {
+            // When there is no error the above try block will go to this catch block
+            // Processing JSON object when there is data returned
             try {
                 JSONObject jsonObj = new JSONObject(result);
+
                 JSONObject main = jsonObj.getJSONObject("main");
                 JSONObject sys = jsonObj.getJSONObject("sys");
                 JSONObject wind = jsonObj.getJSONObject("wind");
@@ -75,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
 
                 Long updatedAt = jsonObj.getLong("dt");
                 String updatedAtText = "Updated at: " + new SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.ENGLISH).format(new Date(updatedAt * 1000));
-                String temp = main.getString("temp") + "°C";
+                String temperature = main.getString("temp") + "°C";
                 String tempMin = "Min Temp: " + main.getString("temp_min") + "°C";
                 String tempMax = "Max Temp: " + main.getString("temp_max") + "°C";
                 String pressure = main.getString("pressure");
@@ -86,32 +215,128 @@ public class MainActivity extends AppCompatActivity {
                 String windSpeed = wind.getString("speed");
                 String weatherDescription = weather.getString("description");
 
-                String address = jsonObj.getString("name") + ", " + sys.getString("country");
+                String address = jsonObj.getString("name"); // + ", " + sys.getString("country");
 
+                temperatureTxt.setText(temperature);
+                cityNameTxt.setText(address);
 
-                /* Populating extracted data into our views */
-//                addressTxt.setText(address);
-//                updated_atTxt.setText(updatedAtText);
-//                statusTxt.setText(weatherDescription.toUpperCase());
-//                tempTxt.setText(temp);
-//                temp_minTxt.setText(tempMin);
-//                temp_maxTxt.setText(tempMax);
-//                sunriseTxt.setText(new SimpleDateFormat("hh:mm a", Locale.ENGLISH).format(new Date(sunrise * 1000)));
-//                sunsetTxt.setText(new SimpleDateFormat("hh:mm a", Locale.ENGLISH).format(new Date(sunset * 1000)));
-//                windTxt.setText(windSpeed);
-//                pressureTxt.setText(pressure);
-//                humidityTxt.setText(humidity);
+                FileOutputStream cityName;
+                try {
+                    cityName = openFileOutput("cityName", Context.MODE_PRIVATE);
+                    cityName.write(address.getBytes());
+                    cityName.close();
+                } catch (FileNotFoundException err) {
+                    e.printStackTrace();
+                } catch (IOException err) {
+                    e.printStackTrace();
+                }
 
-                /* Views populated, Hiding the loader, Showing the main design */
-//                findViewById(R.id.loader).setVisibility(View.GONE);
-//                findViewById(R.id.mainContainer).setVisibility(View.VISIBLE);
-
-
-            } catch (JSONException e) {
-//                findViewById(R.id.loader).setVisibility(View.GONE);
-//                findViewById(R.id.errorText).setVisibility(View.VISIBLE);
+            } catch (JSONException err) {
+//            System.out.println(e);
             }
-
         }
+
+    }
+
+    // Goes to different activity to see raw returned data from openweather api
+    public void seeRawData(View v) {
+        if (gotWeather) {
+            Intent intent = new Intent(this, RawDataView.class);
+            startActivity(intent);
+        }
+    }
+
+
+    // Below is all the code I tried to make location work, it appears that emulators cannot get the location of the device like a real phone can
+    // Haven't figured out how to emulate location (For getting weather of current location)
+    @SuppressLint("MissingPermission")
+    private void getLastLocation() {
+        if (checkPermissions()) {
+            if (isLocationEnabled()) {
+                mFusedLocationClient.getLastLocation().addOnSuccessListener(this, new OnSuccessListener<Location>() {
+                    @Override
+                    public void onSuccess(Location location) {
+                        // Got last known location. In some rare situations this can be null.
+                        if (location != null) {
+                            // Logic to handle location object
+                        } else {
+                            requestNewLocationData();
+                        }
+                    }
+                });
+            } else {
+                Toast.makeText(this, "Turn on location", Toast.LENGTH_LONG).show();
+                Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                startActivity(intent);
+            }
+        } else {
+            requestPermissions();
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private void requestNewLocationData() {
+
+        LocationRequest mLocationRequest = new LocationRequest();
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        mLocationRequest.setInterval(0);
+        mLocationRequest.setFastestInterval(0);
+        mLocationRequest.setNumUpdates(1);
+
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        mFusedLocationClient.requestLocationUpdates(
+                mLocationRequest, mLocationCallback,
+                Looper.myLooper()
+        );
+
+    }
+
+    private boolean checkPermissions() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            return true;
+        }
+        return false;
+    }
+
+    private void requestPermissions() {
+        ActivityCompat.requestPermissions(
+                this,
+                new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION},
+                PERMISSION_ID
+        );
+    }
+
+    private boolean isLocationEnabled() {
+        LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(
+                LocationManager.NETWORK_PROVIDER
+        );
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_ID) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                getLastLocation();
+            }
+        }
+    }
+
+    private LocationCallback mLocationCallback = new LocationCallback() {
+        @Override
+        public void onLocationResult(LocationResult locationResult) {
+            Location mLastLocation = locationResult.getLastLocation();
+        }
+    };
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (checkPermissions()) {
+            getLastLocation();
+        }
+
     }
 }
