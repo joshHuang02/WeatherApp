@@ -19,6 +19,7 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
@@ -28,12 +29,12 @@ import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -49,14 +50,20 @@ public class MainActivity extends AppCompatActivity {
 
     // my openweather api key
     String API = "3b83dae12419f728565201e7c002b352";
+
     String searchField;
+    double lat;
+    double lon;
 
+    // UI elements
     TextView temperatureTxt;
-    TextView cityNameTxt;
+    TextView displayCityNameTxt;
     Button rawDataBtn;
+    Button currentLocation;
 
-    // For the button "
+    // Controls app behavior based on actions by user
     boolean gotWeather = false;
+    boolean useCurrentLocation = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,24 +71,25 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Attempts to read the saved location from last search and look up weather
-        FileInputStream fin = null;
-        String cityName = "";
-        try {
-            fin = openFileInput("cityName");
-            int c;
-            while ((c = fin.read()) != -1) {
-                cityName = cityName + Character.toString((char) c);
-            }
-            fin.close();
-            searchField = cityName;
-            new weatherTask().execute();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+//        FileInputStream fin = null;
+//        String cityName = "";
+//        try {
+//            fin = openFileInput("cityName");
+//            int c;
+//            while ((c = fin.read()) != -1) {
+//                cityName = cityName + Character.toString((char) c);
+//            }
+//            fin.close();
+//            searchField = cityName;
+//            new weatherTask().execute();
+//        } catch (FileNotFoundException e) {
+//            e.printStackTrace();
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
 
         // Below code allows user to hit enter key to search instead of clicking "SEARCH"
+
         final EditText searchEditText = (EditText) findViewById(R.id.searchEditText);
         searchEditText.setOnKeyListener(new View.OnKeyListener() {
             public boolean onKey(View v, int keyCode, KeyEvent event) {
@@ -91,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
                             String userInput = searchEditText.getText().toString();
                             getWeather(searchEditText);
 
-                            InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
                             imm.hideSoftInputFromWindow(searchEditText.getWindowToken(), 0);
 
                             return true;
@@ -103,12 +111,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Attempt at getting device location, but it didnt work :(
+        // Attempt at getting device location, get weather is called in getLastLocation
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        getLastLocation();
     }
 
     // method of actions to perform when clicking search button
     public void getWeather(View v) {
+        useCurrentLocation = false;
         EditText searchEditText = (EditText) findViewById(R.id.searchEditText);
         searchField = searchEditText.getText().toString();
 
@@ -130,27 +140,16 @@ public class MainActivity extends AppCompatActivity {
         // Getting weather data from openweather api using my API key
         protected String doInBackground(String... args) {
             String response;
-            // Try searching openweather api with a city name endpoint, if error try using zip code endpoint
-            try {
-                response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?q=" + searchField + ",us&units=metric&appid=" + API);
-            } catch (Exception e) {
-                response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?zip=" + searchField + ",us&appid=" + API);
+            if (useCurrentLocation) {
+                response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?lat=" + lat + "&lon=" + lon + "&units=metric&appid=" + API);
+            } else {
+                // Try searching openweather api with a city name endpoint, if error try using zip code endpoint
+                try {
+                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?q=" + searchField + ",us&units=metric&appid=" + API);
+                } catch (Exception e) {
+                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?zip=" + searchField + ",us&units=metric&appid=" + API);
+                }
             }
-            // Would use below code if location services worked
-//            switch (findLocationMethod) {
-//                case "coordinate":
-//                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?lat={" + lat + "}&lon={" + lon + "}&appid=" + API);
-//                    break;
-//                case "cityName":
-//                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?q=" + city + ",us&units=metric&appid=" + API);
-//                    break;
-//                case "zipCode":
-//                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?zip=" + zipCode + ",us&appid=" + API);
-//                    break;
-//                default:
-//                    response = HttpRequest.excuteGet("https://api.openweathermap.org/data/2.5/weather?q=" + city + "&units=metric&appid=" + API);
-//                    break;
-//            }
             return response;
         }
 
@@ -164,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
     // actions to display weather and save data
     public void displayWeather(String result) {
         temperatureTxt = (TextView) findViewById(R.id.tempTxt);
-        cityNameTxt = (TextView) findViewById(R.id.cityNameTxt);
+        displayCityNameTxt = (TextView) findViewById(R.id.cityNameTxt);
         rawDataBtn = (Button) findViewById(R.id.rawDataBtn);
         rawDataBtn.setVisibility(View.VISIBLE);
         gotWeather = true;
@@ -188,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
 
             String code = jsonObj.getString("cod");
             String message = jsonObj.getString("message");
-            cityNameTxt.setText(message);
+            displayCityNameTxt.setText(message);
             temperatureTxt.setText("0°C");
 
         } catch (JSONException e) {
@@ -218,7 +217,7 @@ public class MainActivity extends AppCompatActivity {
                 String address = jsonObj.getString("name"); // + ", " + sys.getString("country");
 
                 temperatureTxt.setText(temperature);
-                cityNameTxt.setText(address);
+                displayCityNameTxt.setText(address);
 
                 FileOutputStream cityName;
                 try {
@@ -232,7 +231,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
             } catch (JSONException err) {
-//            System.out.println(e);
+            System.out.println(e);
             }
         }
 
@@ -247,23 +246,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    // Below is all the code I tried to make location work, it appears that emulators cannot get the location of the device like a real phone can
-    // Haven't figured out how to emulate location (For getting weather of current location)
+    // Below is all the code to make get location work, get weather is called once location is got
     @SuppressLint("MissingPermission")
     private void getLastLocation() {
         if (checkPermissions()) {
             if (isLocationEnabled()) {
-                mFusedLocationClient.getLastLocation().addOnSuccessListener(this, new OnSuccessListener<Location>() {
-                    @Override
-                    public void onSuccess(Location location) {
-                        // Got last known location. In some rare situations this can be null.
-                        if (location != null) {
-                            // Logic to handle location object
-                        } else {
-                            requestNewLocationData();
+                mFusedLocationClient.getLastLocation().addOnCompleteListener(
+                        new OnCompleteListener<Location>() {
+
+                            @Override
+                            public void onComplete(@NonNull Task<Location> task) {
+                                Location location = task.getResult();
+                                if (location == null) {
+                                    requestNewLocationData();
+                                } else {
+                                    String tempLat = location.getLatitude() + "";
+                                    String tempLon = location.getLongitude() + "";
+                                    lat = Double.parseDouble(tempLat);
+                                    lon = Double.parseDouble(tempLon);
+                                    new weatherTask().execute();
+                                }
+                            }
                         }
-                    }
-                });
+                );
             } else {
                 Toast.makeText(this, "Turn on location", Toast.LENGTH_LONG).show();
                 Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
@@ -273,6 +278,7 @@ public class MainActivity extends AppCompatActivity {
             requestPermissions();
         }
     }
+
 
     @SuppressLint("MissingPermission")
     private void requestNewLocationData() {
@@ -290,6 +296,18 @@ public class MainActivity extends AppCompatActivity {
         );
 
     }
+
+    private LocationCallback mLocationCallback = new LocationCallback() {
+        @Override
+        public void onLocationResult(LocationResult locationResult) {
+            Location mLastLocation = locationResult.getLastLocation();
+            String tempLat = mLastLocation.getLatitude() + "";
+            String tempLon = mLastLocation.getLongitude() + "";
+            lat = Double.parseDouble(tempLat);
+            lon = Double.parseDouble(tempLon);
+            new weatherTask().execute();
+        }
+    };
 
     private boolean checkPermissions() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
@@ -323,13 +341,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-
-    private LocationCallback mLocationCallback = new LocationCallback() {
-        @Override
-        public void onLocationResult(LocationResult locationResult) {
-            Location mLastLocation = locationResult.getLastLocation();
-        }
-    };
 
     @Override
     public void onResume() {
