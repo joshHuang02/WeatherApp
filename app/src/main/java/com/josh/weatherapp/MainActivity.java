@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
 import android.provider.Settings;
@@ -20,6 +21,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
@@ -35,10 +37,12 @@ import com.google.android.gms.tasks.Task;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.Locale;
 
@@ -58,12 +62,17 @@ public class MainActivity extends AppCompatActivity {
     // UI elements
     TextView temperatureTxt;
     TextView displayCityNameTxt;
+    TextView highTempTxt;
+    TextView lowTempTxt;
+    TextView pressureTxt;
+    TextView humidityTxt;
+    TextView sunriseTxt;
+    TextView sunsetTxt;
     Button rawDataBtn;
-    Button currentLocation;
 
     // Controls app behavior based on actions by user
     boolean gotWeather = false;
-    boolean useCurrentLocation = true;
+    boolean useCurrentLocation = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,22 +80,22 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Attempts to read the saved location from last search and look up weather
-//        FileInputStream fin = null;
-//        String cityName = "";
-//        try {
-//            fin = openFileInput("cityName");
-//            int c;
-//            while ((c = fin.read()) != -1) {
-//                cityName = cityName + Character.toString((char) c);
-//            }
-//            fin.close();
-//            searchField = cityName;
-//            new weatherTask().execute();
-//        } catch (FileNotFoundException e) {
-//            e.printStackTrace();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
+        FileInputStream fin = null;
+        String cityName = "";
+        try {
+            fin = openFileInput("cityName");
+            int c;
+            while ((c = fin.read()) != -1) {
+                cityName = cityName + Character.toString((char) c);
+            }
+            fin.close();
+            searchField = cityName;
+            new weatherTask().execute();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         // Below code allows user to hit enter key to search instead of clicking "SEARCH"
 
@@ -154,6 +163,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // After receiving a response from api
+        @RequiresApi(api = Build.VERSION_CODES.O)
         @Override
         protected void onPostExecute(String result) {
             displayWeather(result);
@@ -161,9 +171,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // actions to display weather and save data
+    @RequiresApi(api = Build.VERSION_CODES.O)
     public void displayWeather(String result) {
         temperatureTxt = (TextView) findViewById(R.id.tempTxt);
         displayCityNameTxt = (TextView) findViewById(R.id.cityNameTxt);
+        highTempTxt = (TextView) findViewById(R.id.highTempTxt);
+        lowTempTxt = (TextView) findViewById(R.id.lowTempTxt);
+        pressureTxt = (TextView) findViewById(R.id.pressureTxt);
+        humidityTxt = (TextView) findViewById(R.id.humidityTxt);
+        sunriseTxt = (TextView) findViewById(R.id.sunRiseTxt);
+        sunsetTxt = (TextView) findViewById(R.id.sunSetTxt);
         rawDataBtn = (Button) findViewById(R.id.rawDataBtn);
         rawDataBtn.setVisibility(View.VISIBLE);
         gotWeather = true;
@@ -189,6 +206,12 @@ public class MainActivity extends AppCompatActivity {
             String message = jsonObj.getString("message");
             displayCityNameTxt.setText(message);
             temperatureTxt.setText("0°C");
+            highTempTxt.setText("High: ");
+            lowTempTxt.setText("Low: ");
+            pressureTxt.setText("Pressure: ");
+            humidityTxt.setText("Humidity: ");
+            sunriseTxt.setText("Sunrise:  ");
+            sunsetTxt.setText("Sunset:  ");
 
         } catch (JSONException e) {
             // When there is no error the above try block will go to this catch block
@@ -204,20 +227,25 @@ public class MainActivity extends AppCompatActivity {
                 Long updatedAt = jsonObj.getLong("dt");
                 String updatedAtText = "Updated at: " + new SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.ENGLISH).format(new Date(updatedAt * 1000));
                 String temperature = main.getString("temp") + "°C";
-                String tempMin = "Min Temp: " + main.getString("temp_min") + "°C";
-                String tempMax = "Max Temp: " + main.getString("temp_max") + "°C";
+                String tempMin = main.getString("temp_min") + "°C";
+                String tempMax = main.getString("temp_max") + "°C";
                 String pressure = main.getString("pressure");
                 String humidity = main.getString("humidity");
 
                 Long sunrise = sys.getLong("sunrise");
                 Long sunset = sys.getLong("sunset");
-                String windSpeed = wind.getString("speed");
-                String weatherDescription = weather.getString("description");
-
+                java.util.Date sunriseTime = new java.util.Date(sunrise * 1000);
+                java.util.Date sunsetTime = new java.util.Date(sunset * 1000);
                 String address = jsonObj.getString("name"); // + ", " + sys.getString("country");
 
                 temperatureTxt.setText(temperature);
                 displayCityNameTxt.setText(address);
+                highTempTxt.setText("High: " + tempMax);
+                lowTempTxt.setText("Low: " + tempMin);
+                pressureTxt.setText("Pressure: " + pressure + " hPa");
+                humidityTxt.setText("Humidity: " + humidity + "%");
+                sunriseTxt.setText("Sunrise:  " + sunriseTime.toInstant().atZone(ZoneId.systemDefault()).getHour() + ":" + sunriseTime.toInstant().atZone(ZoneId.systemDefault()).getMinute() + " PDT");
+                sunsetTxt.setText("Sunset:  " + sunsetTime.toInstant().atZone(ZoneId.systemDefault()).getHour() + ":" + sunsetTime.toInstant().atZone(ZoneId.systemDefault()).getMinute() + " PDT");
 
                 FileOutputStream cityName;
                 try {
@@ -231,7 +259,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
             } catch (JSONException err) {
-            System.out.println(e);
+                System.out.println(e);
             }
         }
 
@@ -243,6 +271,11 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(this, RawDataView.class);
             startActivity(intent);
         }
+    }
+
+    public void getWeatherAtCurrentLocation(View v) {
+        this.useCurrentLocation = true;
+        new weatherTask().execute();
     }
 
 

@@ -69,10 +69,70 @@
         android:id="@+id/currentLocationBtn"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:onClick="getWeatherAtCurrentLocation"
         android:text="Use Current Location"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/searchEditText" />
+
+    <TextView
+        android:id="@+id/highTempTxt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="124dp"
+        android:text="High: "
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tempTxt" />
+
+    <TextView
+        android:id="@+id/lowTempTxt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="124dp"
+        android:text="Low: "
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/highTempTxt" />
+
+    <TextView
+        android:id="@+id/pressureTxt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="112dp"
+        android:layout_marginTop="60dp"
+        android:text="Pressure: "
+        android:textSize="24sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tempTxt" />
+
+    <TextView
+        android:id="@+id/humidityTxt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Humidity: "
+        android:textSize="24sp"
+        app:layout_constraintStart_toStartOf="@+id/pressureTxt"
+        app:layout_constraintTop_toBottomOf="@+id/pressureTxt" />
+
+    <TextView
+        android:id="@+id/sunRiseTxt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Sunrise: "
+        android:textSize="24sp"
+        app:layout_constraintStart_toStartOf="@+id/humidityTxt"
+        app:layout_constraintTop_toBottomOf="@+id/humidityTxt" />
+
+    <TextView
+        android:id="@+id/sunSetTxt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Sunset: "
+        android:textSize="24sp"
+        app:layout_constraintStart_toStartOf="@+id/sunRiseTxt"
+        app:layout_constraintTop_toBottomOf="@+id/sunRiseTxt" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
